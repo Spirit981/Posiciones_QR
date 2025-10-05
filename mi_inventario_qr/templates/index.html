@@ -1,0 +1,191 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Posiciones QR</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f9; }
+        h1 { color: #333; }
+        #buscador { padding: 10px; width: 100%; max-width: 600px; margin-bottom: 20px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        #listado { max-width: 600px; }
+        .item { 
+            background-color: #fff; 
+            padding: 15px; 
+            margin-bottom: 10px; 
+            border-radius: 6px; 
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); 
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .item:hover { background-color: #eef; }
+        
+        /* Estilos de las columnas según tu solicitud */
+        .posicion { font-size: 1.5em; font-weight: bold; color: #0056b3; }
+        .zona { font-size: 0.8em; color: #666; margin-top: 2px; }
+        .descripcion { font-size: 1em; color: #333; margin-top: 5px; }
+
+        /* Estilo para el Modal (Ventana Emergente del QR) */
+        .modal {
+            display: none; 
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 300px;
+            text-align: center;
+            border-radius: 8px;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close:hover,
+        .close:focus {
+            color: #000;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        #qr-codigo-valor { 
+            font-size: 1.8em; 
+            font-weight: bold; 
+            margin: 15px 0;
+            color: #d9534f;
+        }
+        #qrcode { margin: 20px auto; }
+    </style>
+</head>
+<body>
+
+    <h1>Buscador de POSICIONES</h1>
+
+    <input type="text" id="buscador" placeholder="Buscar por POSICIÓN..." onkeyup="buscarItems()">
+
+    <div id="listado">
+        Cargando items...
+    </div>
+
+    <div id="qrModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="cerrarModal()">&times;</span>
+            <h2>Código QR Generado</h2>
+            <div id="qr-codigo-valor"></div>
+            <div id="qrcode"></div>
+        </div>
+    </div>
+
+    <script>
+        // Función para actualizar la lista de items
+        function renderizarItems(items) {
+            const listado = document.getElementById('listado');
+            listado.innerHTML = ''; // Limpiar lista anterior
+
+            if (items.length === 0) {
+                listado.innerHTML = '<p>No se encontraron resultados para la búsqueda.</p>';
+                return;
+            }
+
+            items.forEach(item => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'item';
+                
+                // Almacenar el CODIGO para la funcionalidad del QR
+                itemDiv.setAttribute('data-codigo', item.CODIGO);
+                
+                // Evento al pulsar la posición
+                itemDiv.onclick = () => mostrarQR(item.CODIGO);
+
+                // Construir la estructura según tu solicitud
+                itemDiv.innerHTML = `
+                    <div class="posicion">${item.POSICION}</div>
+                    <div class="zona">${item.ZONA}</div>
+                    <div class="descripcion">${item.DESCRIPCION}</div>
+                `;
+                
+                listado.appendChild(itemDiv);
+            });
+        }
+
+        // Función AJAX para buscar elementos
+        async function buscarItems() {
+            const query = document.getElementById('buscador').value;
+            
+            try {
+                // Petición asíncrona a la ruta de Flask '/buscar'
+                const response = await fetch(`/buscar?query=${encodeURIComponent(query)}`);
+                
+                if (!response.ok) {
+                    throw new Error(`Error HTTP: ${response.status}`);
+                }
+
+                const items = await response.json();
+                renderizarItems(items);
+
+            } catch (error) {
+                console.error("Error al buscar items:", error);
+                document.getElementById('listado').innerHTML = '<p style="color: red;">Error al cargar los datos.</p>';
+            }
+        }
+        
+        // --- Lógica del QR ---
+        
+        // Variable global para el objeto QR (para poder regenerarlo)
+        let qrCode = null;
+        const modal = document.getElementById('qrModal');
+
+        function mostrarQR(codigo) {
+            // 1. Mostrar el código en texto
+            document.getElementById('qr-codigo-valor').textContent = codigo;
+            
+            // 2. Limpiar el contenedor QR previo
+            const qrContainer = document.getElementById('qrcode');
+            qrContainer.innerHTML = '';
+            
+            // 3. Generar el nuevo Código QR
+            // Si el objeto ya existe, lo reusa, si no, lo crea
+            new QRCode(qrContainer, {
+                text: codigo,
+                width: 250,
+                height: 250,
+                colorDark : "#000000",
+                colorLight : "#ffffff",
+                correctLevel : QRCode.CorrectLevel.H
+            });
+            
+            // 4. Mostrar el modal
+            modal.style.display = 'block';
+        }
+
+        function cerrarModal() {
+            modal.style.display = 'none';
+        }
+        
+        // Cierra el modal si el usuario hace clic fuera de la ventana
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                cerrarModal();
+            }
+        }
+
+        // Cargar todos los items al iniciar la página
+        document.addEventListener('DOMContentLoaded', buscarItems);
+    </script>
+
+</body>
+</html>
